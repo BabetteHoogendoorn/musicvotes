@@ -1,0 +1,16 @@
+body {
+  font-family: Arial;
+}
+
+.row {
+  font-size: 30px;
+  color: grey;
+}
+
+.containier {
+	font-size: 30px;
+}
+
+#user-profile-template {
+	font-size: 30px;
+}
