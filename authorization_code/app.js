@@ -1,11 +1,11 @@
 /**
- * This is an example of a basic node.js script that performs
- * the Authorization Code oAuth2 flow to authenticate against
- * the Spotify Accounts.
- *
- * For more information, read
- * https://developer.spotify.com/web-api/authorization-guide/#authorization_code_flow
- */
+* This is an example of a basic node.js script that performs
+* the Authorization Code oAuth2 flow to authenticate against
+* the Spotify Accounts.
+*
+* For more information, read
+* https://developer.spotify.com/web-api/authorization-guide/#authorization_code_flow
+*/
 
 //Models
 var Sequelize = require('sequelize');
@@ -18,12 +18,15 @@ var bodyParser = require('body-parser');
 var fs = require('fs');
 var pg = require('pg');
 var session = require('express-session');
+// var html = require('html');
 var app = express();
 
-//client info
-var client_id = '42b8675a7083451fa42112a5fb9a7d27'; // Your client id
-var client_secret = '571ef69d3a714decb88d8bdbd0407947'; // Your secret
-var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
+//activate bodyParser
+app.use(express.static(__dirname + '/public'))
+.use(cookieParser());
+app.use(bodyParser.urlencoded({ extended: false }))
+
+
 
 //connect to server
 var sequelize = new Sequelize ('musicvote', 'babettehoogendoorn', null, {
@@ -49,6 +52,11 @@ var Song = sequelize.define('song', {
 
 var Vote = sequelize.define('vote');
 
+var Playlist = sequelize.define('playlist', {
+  name: Sequelize.STRING,
+  end: Sequelize.STRING
+});
+
 var Event = sequelize.define('event', {
   event_name: Sequelize.STRING,
   event_end: Sequelize.STRING
@@ -64,12 +72,27 @@ Song.hasMany(Vote);
 Vote.belongsTo(Event);
 Event.hasMany(Vote);
 
+Playlist.belongsTo(User);
+User.hasMany(Playlist);
+//
+// Playlist.belngsTo(Event);
+// Event.hasMany(Playlist);
+
+// Musicvote listeners
+// app.post('/createplaylist', function(req, res){
+//   res.send(req.body)
+// })
+
+
 /**
- * Generates a random string containing numbers and letters
- * @param  {number} length The length of the string
- * @return {string} The generated string
- */
- var generateRandomString = function(length) {
+* SPOTIFY API
+*/
+//client info
+var client_id = '42b8675a7083451fa42112a5fb9a7d27'; // Your client id
+var client_secret = '571ef69d3a714decb88d8bdbd0407947'; // Your secret
+var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
+var vote_uri = 'http://localhost:8888/vote';
+var generateRandomString = function(length) {
   var text = '';
   var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -81,11 +104,6 @@ Event.hasMany(Vote);
 
 var stateKey = 'spotify_auth_state';
 
-var app = express();
-
-//activate bodyParser
-app.use(express.static(__dirname + '/public'))
-.use(cookieParser());
 
 //get login
 app.get('/login', function(req, res) {
@@ -96,13 +114,13 @@ app.get('/login', function(req, res) {
   // your application requests authorization
   var scope = 'user-read-private user-read-email';
   res.redirect('https://accounts.spotify.com/authorize?' +
-    querystring.stringify({
-      response_type: 'code',
-      client_id: client_id,
-      scope: scope,
-      redirect_uri: redirect_uri,
-      state: state
-    }));
+  querystring.stringify({
+    response_type: 'code',
+    client_id: client_id,
+    scope: scope,
+    redirect_uri: redirect_uri,
+    state: state
+  }));
 });
 
 //get callback
@@ -117,9 +135,9 @@ app.get('/callback', function(req, res) {
 
   if (state === null || state !== storedState) {
     res.redirect('/#' +
-      querystring.stringify({
-        error: 'state_mismatch'
-      }));
+    querystring.stringify({
+      error: 'state_mismatch'
+    }));
   } else {
     res.clearCookie(stateKey);
     var authOptions = {
@@ -136,7 +154,7 @@ app.get('/callback', function(req, res) {
     };
 
 
-    
+
 
     // .spread(function(user, created) {
     //   console.log(user.get({
@@ -145,7 +163,7 @@ app.get('/callback', function(req, res) {
     //   console.log(created)
     // })
 
-    
+
     request.post(authOptions, function(error, response, body) {
       if (!error && response.statusCode === 200) {
 
@@ -162,6 +180,8 @@ app.get('/callback', function(req, res) {
         request.get(options, function(error, response, body) {
           console.log('API Get Body')
           console.log(body);
+
+
           //save userdata in database
           User.findOrCreate({
             where: {
@@ -181,25 +201,54 @@ app.get('/callback', function(req, res) {
               console.log('User created and updated:')
               console.log(theuser)
             })
-            
+
           });
         });
 
+
+
+
+
+
+        //save votedata in database
+        // Vote.findOrCreate({
+        // }).then(function(thevote) {
+        //   Vote.findOne({
+        //   }).then(function(thevote))
+        // })
+        // console.log('Vote created')
+        // console.log(theuser)
+
+        //save playlistdata in database
+
+
         // we can also pass the token to the browser to make requests from there
         res.redirect('/#' +
-          querystring.stringify({
-            access_token: access_token,
-            refresh_token: refresh_token
-          }));
+        querystring.stringify({
+          access_token: access_token,
+          refresh_token: refresh_token
+        }));
       } else {
         res.redirect('/#' +
-          querystring.stringify({
-            error: 'invalid_token'
-          }));
+        querystring.stringify({
+          error: 'invalid_token'
+        }));
       }
     });
   }
 });
+
+//save playlistdata in database
+app.post('/createplaylist', function (req, res) {
+console.log('hi babette')
+console.log(req.body)
+  Playlist.create({
+    name: req.body.name,
+    end: req.body.end  
+  }).then(function(theplaylist) {
+    res.send(theplaylist)
+  })
+} )
 
 //get refresh token
 app.get('/refresh_token', function(req, res) {
@@ -226,13 +275,17 @@ app.get('/refresh_token', function(req, res) {
   });
 });
 
-  //tell the port to listen
-  var server = app.listen(8888, function () {
-    console.log('Example app listening on port: ' + server.address().port);
-  });
 
 
-  //synching with database
-  sequelize.sync({force: true}).then( function(){
-    console.log('sync done');
-  });
+
+
+//tell the port to listen
+var server = app.listen(8888, function () {
+  console.log('Example app listening on port: ' + server.address().port);
+});
+
+
+//synching with database
+sequelize.sync({force: true}).then( function(){
+  console.log('sync done');
+});
