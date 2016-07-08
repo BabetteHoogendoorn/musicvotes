@@ -23,9 +23,23 @@ var app = express();
 
 //activate bodyParser
 app.use(express.static(__dirname + '/public'))
-.use(cookieParser());
+app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: false }))
 
+//activate session
+app.use(session({
+  secret: 'super mega ukulele',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    expires: false
+  }
+}));
+app.use(function(req, res, next){
+  console.log('Session check: ' + req.session)
+  console.log('Session user check: ' + req.session.user);
+  next()
+})
 
 
 //connect to server
@@ -133,6 +147,8 @@ app.get('/callback', function(req, res) {
   var state = req.query.state || null;
   var storedState = req.cookies ? req.cookies[stateKey] : null;
 
+  console.log(req.query);
+
   if (state === null || state !== storedState) {
     res.redirect('/#' +
     querystring.stringify({
@@ -154,16 +170,6 @@ app.get('/callback', function(req, res) {
     };
 
 
-
-
-    // .spread(function(user, created) {
-    //   console.log(user.get({
-    //     plain: true
-    //   }))
-    //   console.log(created)
-    // })
-
-
     request.post(authOptions, function(error, response, body) {
       if (!error && response.statusCode === 200) {
 
@@ -181,7 +187,6 @@ app.get('/callback', function(req, res) {
           console.log('API Get Body')
           console.log(body);
 
-
           //save userdata in database
           User.findOrCreate({
             where: {
@@ -193,13 +198,23 @@ app.get('/callback', function(req, res) {
                 user_id: body.id
               }
             }).then(function(theuser){
+
               theuser.update({
                 user_email: body.email,
                 access_token: access_token,
                 refresh_token: refresh_token
+              }).then(function(updateduser){
+                req.session.user = updateduser.dataValues
+                console.log('Setting session user: ')
+                console.log(req.session.user)
+                // we can also pass the token to the browser to make requests from there
+                res.redirect('/#' +
+                querystring.stringify({
+                  access_token: access_token,
+                  refresh_token: refresh_token
+                }));
               })
-              console.log('User created and updated:')
-              console.log(theuser)
+
             })
 
           });
@@ -207,27 +222,6 @@ app.get('/callback', function(req, res) {
 
 
 
-
-
-
-        //save votedata in database
-        // Vote.findOrCreate({
-        // }).then(function(thevote) {
-        //   Vote.findOne({
-        //   }).then(function(thevote))
-        // })
-        // console.log('Vote created')
-        // console.log(theuser)
-
-        //save playlistdata in database
-
-
-        // we can also pass the token to the browser to make requests from there
-        res.redirect('/#' +
-        querystring.stringify({
-          access_token: access_token,
-          refresh_token: refresh_token
-        }));
       } else {
         res.redirect('/#' +
         querystring.stringify({
@@ -240,15 +234,28 @@ app.get('/callback', function(req, res) {
 
 //save playlistdata in database
 app.post('/createplaylist', function (req, res) {
-console.log('hi babette')
-console.log(req.body)
+  console.log('hi babette, session is:')
+  console.log(req.session.user) //FIND OUT HOW TO CONSOLE LOG USER ID -- DEFINE VARIABLE FOR USER I.E. WELCOME BABETTE
   Playlist.create({
     name: req.body.name,
-    end: req.body.end  
+    end: req.body.end
   }).then(function(theplaylist) {
     res.send(theplaylist)
   })
-} )
+})
+
+//get playlist on playlist page
+app.get('/', function (req, res) {
+  Playlist.findOne({
+    where: {
+      name: req.query.name,
+      end: req.query.end
+    },
+  }).then(function(playlist){
+    res.send(playlist)
+  })
+});
+
 
 //get refresh token
 app.get('/refresh_token', function(req, res) {
